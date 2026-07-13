@@ -1,0 +1,5 @@
+build/
+builds/
+llama.cpp/
+models-preset.ini
+*.gguf
