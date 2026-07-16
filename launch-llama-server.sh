@@ -199,7 +199,7 @@ fi
 # Launch
 # ------------------------------------------------------------------
 echo "--- Launching llama-server ---"
-echo "${BIN_PATH}/llama-server ${ARGS[*]}"
+echo "$(printf "'%s' " "${BIN_PATH}/llama-server" "${ARGS[@]}")"
 echo
 
 exec "${BIN_PATH}/llama-server" "${ARGS[@]}"
