@@ -54,12 +54,12 @@ if [[ -f "$ENV_FILE" ]]; then
     done < "$ENV_FILE"
 fi
 
-BIN_PATH="${BIN_PATH:-$HOME/llm/llama.cpp/build/bin}"          # the path to your llama.cpp binaries
+BIN_PATH="${BIN_PATH:-$HOME/ai-stack/engines/llama.cpp/build/bin/}"          # the path to your llama.cpp binaries
 
 # ------------------------------------------------------------------
 # Network
 # ------------------------------------------------------------------
-HOST_VALUE="${HOST_VALUE:-0.0.0.0}"    # 127.0.0.1 for localhost-only, 0.0.0.0 to have access on LAN
+HOST_VALUE="${HOST_VALUE:-127.0.0.1}"    # 127.0.0.1 for localhost-only, 0.0.0.0 to have access on LAN
 HOST_ENABLED="${HOST_ENABLED:-ON}"
 
 PORT_VALUE="${PORT_VALUE:-8011}"          # replace with your port of choice
@@ -69,14 +69,14 @@ API_KEY_VALUE="${API_KEY_VALUE:-}"    # leave blank unless you want to require a
                                        # pass in via env var so it never has to live in this file, e.g.
                                        #   API_KEY_VALUE="$(pass show llama-server-key)" ./launch-llama-server.sh
 API_KEY_ENABLED="${API_KEY_ENABLED:-OFF}"
-ALLOW_UNAUTHENTICATED="${ALLOW_UNAUTHENTICATED:-1}"  # Changing to 1 will allow launching on a host other than 127.0.0.1 or
-                                     # localhost without an API key assigned.
-                                     # Warning: Only change to 1 if you are on a trusted LAN
-                                     # and accept the risks.
+ALLOW_UNAUTHENTICATED="${ALLOW_UNAUTHENTICATED:-0}"  # Changing to 1 will allow launching on a host other than 127.0.0.1 or
+                                      # localhost without an API key assigned.
+                                      # Warning: Only change to 1 if you are on a trusted LAN
+                                      # and accept the risks.
 # ------------------------------------------------------------------
 # Model routing (models-preset.ini)
 # ------------------------------------------------------------------
-MODELS_PRESET_VALUE="${MODELS_PRESET_VALUE:-$HOME/llm/models/models-preset.ini}"          # path to models-preset.ini
+MODELS_PRESET_VALUE="${MODELS_PRESET_VALUE:-$HOME/ai-stack/models/models-preset.ini}"          # path to models-preset.ini
 MODELS_PRESET_ENABLED="${MODELS_PRESET_ENABLED:-ON}"
 
 MODELS_MAX_VALUE="${MODELS_MAX_VALUE:-1}"          # how many models loaded concurrently before eviction

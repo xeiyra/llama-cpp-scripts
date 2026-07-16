@@ -12,9 +12,6 @@
 # Optional environment overrides:
 #   PREFIX_QUANTIZER=0  # set to 0 to name entries after the model folder only,
 #                        # instead of "quantizer_modelname" (default: 1)
-# Optional environment overrides:
-#   PREFIX_QUANTIZER=0  # set to 0 to name entries after the model folder only,
-#                        # instead of "quantizer_modelname" (default: 1)
 #   STRIP_SUFFIXES=GGUF # comma-separated, case-insensitive list of trailing
 #                        # "-suffix" strings to strip from model folder names
 #                        # before building the preset name (default: GGUF)
