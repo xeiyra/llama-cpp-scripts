@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
-# 0. Variables (override on the command line if desired)
+# 1. ROCm/HIP environment (hardcoded paths — see .env docs for overrides)
 # ------------------------------------------------------------------
 export ROCM_PATH=/opt/rocm
 export HIP_PATH=/opt/rocm
@@ -12,7 +12,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rocm/lib
 export GGML_CCACHE=OFF
 
 # ------------------------------------------------------------------
-# 1. Variables (override on the command line if desired)
+# 2. Variables (.env loader + defaults; override on the command line)
 # ------------------------------------------------------------------
 
 # .env loader (optional) — reads simple KEY=value pairs from a .env
@@ -63,7 +63,7 @@ ALLOW_DIRTY=${ALLOW_DIRTY:-0}       # Set to 1 to bypass `git pull` confirmation
                                     # hand-edited files found in CLONE_DIR
 
 # ------------------------------------------------------------------
-# 2. Environment sanity checks
+# 3. Environment sanity checks
 # ------------------------------------------------------------------
 command -v git     >/dev/null || { echo "❌ git not found"; exit 1; }
 command -v cmake   >/dev/null || { echo "❌ cmake not found"; exit 1; }
@@ -74,7 +74,7 @@ if [ "$GGML_HIP" = "ON" ]; then
 fi
 
 # ------------------------------------------------------------------
-# 2b. Warn about clone directory hygiene before touching anything
+# 4. Warn about clone directory hygiene before touching anything
 # ------------------------------------------------------------------
 # CLONE_DIR is a disposable, machine-managed source checkout — this
 # script runs `git pull` on it and may re-clone it from scratch.
@@ -104,7 +104,7 @@ if [ -d "${CLONE_DIR}/.git" ] && [ -n "$(git -C "$CLONE_DIR" status --porcelain 
 fi
 
 # ------------------------------------------------------------------
-# 3. Clone or update the repository (archiving the old build first)
+# 5. Clone or update the repository (archiving the old build first)
 # ------------------------------------------------------------------
 if [ -d "${CLONE_DIR}/.git" ]; then
     echo "--- Checking existing llama.cpp clone ---"
@@ -134,7 +134,7 @@ else
 fi
 
 # ------------------------------------------------------------------
-# 4. Configure with CMake
+# 6. Configure with CMake
 # ------------------------------------------------------------------
 echo "--- Configuring Build ---"
 
@@ -183,7 +183,7 @@ if ! grep -q '^GGML_HIP:BOOL=ON$' <<< "$CACHE_LIST"; then
 fi
 
 # ------------------------------------------------------------------
-# 5. Build
+# 7. Build
 # ------------------------------------------------------------------
 echo "--- Starting Build ---"
 # We don't need --parallel here because we are using Ninja!
@@ -191,7 +191,7 @@ cmake --build "$BUILD_DIR"
 
 
 # ------------------------------------------------------------------
-# 6. Optional install step
+# 8. Optional install step
 # ------------------------------------------------------------------
 # Uncomment if you want to drop the binaries into /usr/local:
 # cmake --install "$BUILD_DIR" --prefix /usr/local

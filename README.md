@@ -22,6 +22,18 @@ automatic swapping via `--models-preset` + `--models-max 1`.
 - `git`, `cmake`, `ninja`
 - Bash 4+
 
+## .env file
+
+All three scripts read an optional `.env` file from the same directory as
+the script itself. It uses a simple `KEY=value` parser — no shell sourcing
+or execution. Variables set in the real shell environment always take
+precedence over values in `.env`, so a one-off override like
+`BIN_PATH=/tmp/test ./launch-llama-server.sh` still wins.
+
+See `example.env` for a fully commented reference covering all variables
+for every script. Copy it to `.env` and uncomment / adjust the settings
+you want to change from their built-in defaults.
+
 ## Quick start
 
 ```bash
@@ -63,10 +75,15 @@ Each script is self-contained and configurable via environment variables
 
 ### `install-llama.cpp.sh`
 
-| Variable      | Default | Description                                                                                                 |
-| ------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `GGML_HIP`    | `ON`    | Set to `OFF` to build CPU-only instead of ROCm/HIP                                                          |
-| `ALLOW_DIRTY` | `0`     | Set to `1` to skip the confirmation prompt when `llama.cpp/` has local uncommitted changes (see note below) |
+| Variable              | Default                            | Description                                                                                                 |
+| --------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `ROOT_DIR`            | current working directory          | Parent directory; all other clone/build/archive dirs default to subdirs of this                              |
+| `CLONE_DIR`           | `$ROOT_DIR/llama.cpp`              | Source checkout — treated as disposable; the script runs `git pull` on it                                    |
+| `BUILD_DIR`           | `$ROOT_DIR/build`                  | Current/live build output directory                                                                          |
+| `BUILDS_ARCHIVE_DIR`  | `$ROOT_DIR/builds`                 | Versioned snapshots of previous builds, archived before each rebuild                                         |
+| `BUILD_TYPE`          | `Release`                          | CMake build type (`Release`, `Debug`, `RelWithDebInfo`, etc.)                                                |
+| `GGML_HIP`            | `ON`                               | Set to `OFF` to build CPU-only instead of ROCm/HIP                                                           |
+| `ALLOW_DIRTY`         | `0`                                | Set to `1` to skip the confirmation prompt when `llama.cpp/` has local uncommitted changes (see note below) |
 
 The `llama.cpp/` clone is treated as a **disposable, machine-managed
 checkout** — the script runs `git pull` on it and may re-clone it. Don't
@@ -83,11 +100,12 @@ overwrites `build/`, so you can roll back to a previous binary if needed.
 Usage: ./generate-models-preset.sh <models_dir> [output.ini]
 ```
 
-| Variable           | Default   | Description                                                                                                                                                                                                    |
-| ------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PREFIX_QUANTIZER` | `1`       | Set to `0` to name entries after the model folder only, instead of `quantizer_modelname`                                                                                                                       |
-| `STRIP_SUFFIXES`   | `GGUF`    | Comma-separated, case-insensitive suffixes stripped from model folder names before naming the entry. Set to `""` to disable                                                                                    |
-| `EXTRA_ARGS`       | *(unset)* | Newline-separated `key = value` lines applied to every generated section. Keys must match the long-form flag names `llama-server`'s preset parser expects — check with `llama-server --help \| grep -i <flag>` |
+| Variable                    | Default   | Description                                                                                                                                                                                                    |
+| --------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PREFIX_QUANTIZER`          | `1`       | Set to `0` to name entries after the model folder only, instead of `quantizer_modelname`                                                                                                                       |
+| `STRIP_SUFFIXES`            | `GGUF`    | Comma-separated, case-insensitive suffixes stripped from model folder names before naming the entry. Set to `""` to disable                                                                                    |
+| `FOLLOW_SYMLINKS_ENABLED`   | `OFF`     | Set to `ON` to follow symlinks when scanning for models (default: off for safety — symlinked directories could be traversed unintentionally)                                                                   |
+| `EXTRA_ARGS`                | *(unset)* | Newline-separated `key = value` lines applied to every generated section. Keys must match the long-form flag names `llama-server`'s preset parser expects — check with `llama-server --help \| grep -i <flag>` |
 
 The script is safe to re-run against a growing model collection: it dedups
 on model file path (not section name), so manually renaming a section
@@ -101,11 +119,11 @@ omit it entirely. A few of the more relevant ones:
 
 | Variable                            | Default                              | Description                                                                                                                                                                       |
 | ----------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BIN_PATH`                          | `$HOME/llama.cpp/build/bin`          | Path to the built `llama-server` binary                                                                                                                                           |
+| `BIN_PATH`                          | `$HOME/ai-stack/engines/llama.cpp/build/bin` | Path to the built `llama-server` binary                                                                                                                                           |
 | `HOST_VALUE`                        | `127.0.0.1`                          | `127.0.0.1` for localhost-only, `0.0.0.0` for LAN access                                                                                                                          |
 | `API_KEY_VALUE` / `API_KEY_ENABLED` | *(unset)* / `OFF`                    | Set both to require an API key. Pass the key in via env var at launch rather than editing the file, e.g. `API_KEY_VALUE="$(pass show llama-server-key)" ./launch-llama-server.sh` |
-| `ALLOW_UNAUTHENTICATED`             | `0`                                  | See safety note below                                                                                                                                                             |
-| `MODELS_PRESET_VALUE`               | `$HOME/llm/models/models-preset.ini` | Path to your generated preset file                                                                                                                                                |
+| `ALLOW_UNAUTHENTICATED`             | `0`                                  | Set to `1` to bypass the safety check that refuses to bind a non-localhost host without an API key. Only on trusted LAN — see safety note below                                    |
+| `MODELS_PRESET_VALUE`               | `$HOME/ai-stack/models/models-preset.ini` | Path to your generated preset file                                                                                                                                               |
 | `MODELS_MAX_VALUE`                  | `1`                                  | How many models stay loaded concurrently before eviction                                                                                                                          |
 
 Run `"$BIN_PATH"/llama-server --help` to check current flag syntax before

@@ -17,9 +17,6 @@ set -euo pipefail
 # ==================================================================
 
 # ------------------------------------------------------------------
-# Binary location
-# ------------------------------------------------------------------
-# ------------------------------------------------------------------
 # .env loader (optional) — reads simple KEY=value pairs from a .env
 # file in the same directory as this script, without sourcing/
 # executing it. Only sets a variable if it isn't already set in the

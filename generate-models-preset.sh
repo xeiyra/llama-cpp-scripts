@@ -17,6 +17,8 @@
 #                        # before building the preset name (default: GGUF)
 #                        # e.g. "Tesslate_OmniCoder-9B-GGUF" -> "Tesslate_OmniCoder-9B"
 #                        # Set to "" to disable stripping entirely.
+#   FOLLOW_SYMLINKS_ENABLED  # ON to follow symlinks when scanning for models;
+#                            # leave OFF (default) to ignore them safely.
 #   EXTRA_ARGS          # newline-separated "key = value" lines applied to
 #                        # every generated section. Key names must match the
 #                        # long-form flag name llama-server's preset parser
@@ -91,6 +93,11 @@ STRIP_SUFFIXES="${STRIP_SUFFIXES:-GGUF}"
 #   EXTRA_ARGS=$'fitt = 2048\nfitc = 8192' ./generate-models-preset.sh llm out.ini
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 
+# Whether to follow symlinks when scanning for model files.
+# Set to ON if your model layout uses intentional symlinks; leave OFF (default)
+# to safely ignore them and avoid accidentally pulling in unrelated paths.
+FOLLOW_SYMLINKS_ENABLED="${FOLLOW_SYMLINKS_ENABLED:-OFF}"
+
 if [[ -z "$MODELS_DIR" ]]; then
   echo "Usage: $0 <models_dir> [output.ini]" >&2
   exit 1
@@ -102,6 +109,13 @@ if [[ ! -d "$MODELS_DIR" ]]; then
 fi
 
 MODELS_DIR="$(realpath "$MODELS_DIR")"
+
+# Build find options — only follow symlinks when explicitly enabled.
+if [[ "${FOLLOW_SYMLINKS_ENABLED:-OFF}" == "ON" ]]; then
+  FIND_OPTS="-L"
+else
+  FIND_OPTS=""
+fi
 
 is_mmproj() {
   [[ "$(basename "$1" | tr '[:upper:]' '[:lower:]')" == mmproj* ]]
@@ -252,7 +266,7 @@ while IFS= read -r -d '' f; do
     echo "Added: $base -> $(basename "$f")"
     count=$((count + 1))
   fi
-done < <(find -L "$MODELS_DIR" -maxdepth 1 -type f -iname "*.gguf" -print0)
+done < <(find $FIND_OPTS "$MODELS_DIR" -maxdepth 1 -type f -iname "*.gguf" -print0)
 
 # Processes a single "model folder" (one that should contain a model .gguf,
 # optionally an mmproj file, or shards). $1 = folder path, $2 = name to use
@@ -260,7 +274,7 @@ done < <(find -L "$MODELS_DIR" -maxdepth 1 -type f -iname "*.gguf" -print0)
 process_model_dir() {
   local dir="$1" entry_name="$2"
 
-  mapfile -d '' -t gguf_files < <(find -L "$dir" -maxdepth 1 -type f -iname "*.gguf" -print0)
+  mapfile -d '' -t gguf_files < <(find $FIND_OPTS "$dir" -maxdepth 1 -type f -iname "*.gguf" -print0)
 
   if [[ ${#gguf_files[@]} -eq 0 ]]; then
     echo "Skipping '$entry_name': no .gguf files found" >&2
@@ -340,7 +354,7 @@ while IFS= read -r -d '' quant_dir; do
       echo "Added: $entry_name -> $(basename "$f")"
       count=$((count + 1))
     fi
-  done < <(find -L "$quant_dir" -maxdepth 1 -type f -iname "*.gguf" -print0)
+  done < <(find $FIND_OPTS "$quant_dir" -maxdepth 1 -type f -iname "*.gguf" -print0)
 
   # Model folders: quantizer-name/model-name/
   while IFS= read -r -d '' model_dir; do
@@ -349,9 +363,9 @@ while IFS= read -r -d '' quant_dir; do
     entry_name="$model_name"
     [[ "$PREFIX_QUANTIZER" == "1" ]] && entry_name="${quant_name}_${model_name}"
     process_model_dir "$model_dir" "$entry_name"
-  done < <(find -L "$quant_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+  done < <(find $FIND_OPTS "$quant_dir" -mindepth 1 -maxdepth 1 -type d -print0)
 
-done < <(find -L "$MODELS_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
+done < <(find $FIND_OPTS "$MODELS_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
 echo
 echo "Done. Wrote $count new model preset(s) to '$OUT_FILE'."
