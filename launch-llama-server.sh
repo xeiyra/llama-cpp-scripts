@@ -28,30 +28,33 @@ ENV_FILE="$SCRIPT_DIR/.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     while IFS='=' read -r key value; do
-        # trim leading whitespace on key before checking for blank/comment lines,
-        # so indented comment-continuation lines are skipped correctly too
+        # Trim leading whitespace from key, skip blanks and comments
         key="${key#"${key%%[![:space:]]*}"}"
         [[ -z "$key" || "$key" == \#* ]] && continue
-        key="${key%"${key##*[![:space:]]}"}"   # trim trailing whitespace on key
-        key="${key#"${key%%[![:space:]]*}"}"   # trim leading whitespace on key
-        value="${value%%[[:space:]]#*}"  # strip an inline trailing comment (space + # onward)
-        value="${value%"${value##*[![:space:]]}"}"  # trim trailing whitespace
-        value="${value#"${value%%[![:space:]]*}"}"  # trim leading whitespace
-        value="${value%\"}"; value="${value#\"}"
+        # Trim trailing/leading whitespace on key and value
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        value="${value%%[[:space:]]#*}"  # strip inline trailing comment (space + #)
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%\"}"; value="${value#\"}"   # strip quotes
         value="${value%\'}"; value="${value#\'}"
-        value="${value/#\~/$HOME}"  # leading ~ -> $HOME
+        value="${value//\\n/$'\n'}"                # \n in .env → real newlines (for multi-line values)
+        value="${value/#\~/$HOME}"                  # leading ~ → $HOME
         while [[ "$value" =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; do
             var="${BASH_REMATCH[1]}"
-            value="${value//${BASH_REMATCH[0]}/${!var:-}}"
+            value="${value//${BASH_REMATCH[0]}/${!var:-}}"  # expand ${VAR} / $VAR references
         done
-        # Don't clobber a value already set in the real environment
         if [[ -z "${!key:-}" ]]; then
             declare "$key=$value"
         fi
     done < "$ENV_FILE"
 fi
 
-BIN_PATH="${BIN_PATH:-$HOME/ai-stack/engines/llama.cpp/build/bin/}"          # the path to your llama.cpp binaries
+# Ensure exactly one trailing slash, regardless of whether .env or env var provides one
+BIN_PATH="${BIN_PATH:-$HOME/ai-stack/engines/llama.cpp/build/bin}"          # the path to your llama.cpp binaries
+BIN_PATH="${BIN_PATH%/}"      # strip any trailing slashes
+BIN_PATH="$BIN_PATH/"         # add exactly one
 
 # ------------------------------------------------------------------
 # Network

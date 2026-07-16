@@ -83,6 +83,8 @@ fi
 # Positional args still take priority over .env / environment
 MODELS_DIR="${1:-${MODELS_DIR:-}}"
 OUT_FILE="${2:-${OUT_FILE:-models-preset.ini}}"
+mkdir -p "$(dirname "$OUT_FILE")"    # ensure output directory exists
+
 PREFIX_QUANTIZER="${PREFIX_QUANTIZER:-1}"
 STRIP_SUFFIXES="${STRIP_SUFFIXES:-GGUF}"
 # Newline-separated "key = value" lines applied to every generated section.
@@ -140,7 +142,12 @@ strip_suffixes() {
   IFS=',' read -r -a _suffix_list <<< "$STRIP_SUFFIXES"
   for suf in "${_suffix_list[@]}"; do
     [[ -z "$suf" ]] && continue
-    name=$(echo "$name" | sed -E "s/-${suf}\$//I")
+    local lower_name lower_suf
+    lower_name="${name,,}"        # bash lowercase (portable, no GNU sed needed)
+    lower_suf="${suf,,}"
+    if [[ "$lower_name" == *"-${lower_suf}" ]]; then
+      name="${name%-${suf}}"  # only strip the original-case suffix that was found
+    fi
   done
   echo "$name"
 }

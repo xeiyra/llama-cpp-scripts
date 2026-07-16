@@ -3,16 +3,7 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
-# 1. ROCm/HIP environment (hardcoded paths — see .env docs for overrides)
-# ------------------------------------------------------------------
-export ROCM_PATH=/opt/rocm
-export HIP_PATH=/opt/rocm
-export PATH=$PATH:/opt/rocm/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rocm/lib
-export GGML_CCACHE=OFF
-
-# ------------------------------------------------------------------
-# 2. Variables (.env loader + defaults; override on the command line)
+# 1. Variables (.env loader + defaults; override on the command line)
 # ------------------------------------------------------------------
 
 # .env loader (optional) — reads simple KEY=value pairs from a .env
@@ -25,19 +16,22 @@ ENV_FILE="$SCRIPT_DIR/.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     while IFS='=' read -r key value; do
+        # Trim leading whitespace from key, skip blanks and comments
         key="${key#"${key%%[![:space:]]*}"}"
         [[ -z "$key" || "$key" == \#* ]] && continue
+        # Trim trailing/leading whitespace on key and value
         key="${key%"${key##*[![:space:]]}"}"
         key="${key#"${key%%[![:space:]]*}"}"
-        value="${value%%[[:space:]]#*}"  # strip an inline trailing comment (space + # onward)
+        value="${value%%[[:space:]]#*}"  # strip inline trailing comment (space + #)
         value="${value%"${value##*[![:space:]]}"}"
         value="${value#"${value%%[![:space:]]*}"}"
-        value="${value%\"}"; value="${value#\"}"
+        value="${value%\"}"; value="${value#\"}"   # strip quotes
         value="${value%\'}"; value="${value#\'}"
-        value="${value/#\~/$HOME}"  # leading ~ -> $HOME
+        value="${value//\\n/$'\n'}"                # \n in .env → real newlines (for multi-line values)
+        value="${value/#\~/$HOME}"                  # leading ~ → $HOME
         while [[ "$value" =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; do
             var="${BASH_REMATCH[1]}"
-            value="${value//${BASH_REMATCH[0]}/${!var:-}}"
+            value="${value//${BASH_REMATCH[0]}/${!var:-}}"  # expand ${VAR} / $VAR references
         done
         if [[ -z "${!key:-}" ]]; then
             declare "$key=$value"
@@ -47,23 +41,24 @@ fi
 
 ROOT_DIR="${ROOT_DIR:-$(pwd)}"    # defaults to cwd if not set via .env or environment
 CLONE_DIR="${CLONE_DIR:-${ROOT_DIR}/llama.cpp}"        # source only — safe to delete/re-clone
-                                          # Treated as a disposable, machine-managed checkout.
-                                          # Do not hand-edit files here — `git pull` runs on this
-                                          # dir and may clobber or conflict with local changes,
-                                          # and a re-clone would wipe them with no warning.
+                                           # Treated as a disposable, machine-managed checkout.
+                                           # Do not hand-edit files here — `git pull` runs on this
+                                           # dir and may clobber or conflict with local changes,
+                                           # and a re-clone would wipe them with no warning.
 BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build}"            # current/live build — outside the repo
 BUILDS_ARCHIVE_DIR="${BUILDS_ARCHIVE_DIR:-${ROOT_DIR}/builds}"  # versioned snapshots — outside the repo
 
 # Hardware/Build Settings
 BUILD_TYPE="${BUILD_TYPE:-Release}"                # Release/Debug etc.
 GGML_HIP="${GGML_HIP:-ON}"          # Whether to use ROCm/HIP
+GGML_CCACHE="${GGML_CCACHE:-OFF}"  # Whether to enable ccache (overridable via .env)
 
 # Git
 ALLOW_DIRTY=${ALLOW_DIRTY:-0}       # Set to 1 to bypass `git pull` confirmation if
                                     # hand-edited files found in CLONE_DIR
 
 # ------------------------------------------------------------------
-# 3. Environment sanity checks
+# 2. Environment sanity checks
 # ------------------------------------------------------------------
 command -v git     >/dev/null || { echo "❌ git not found"; exit 1; }
 command -v cmake   >/dev/null || { echo "❌ cmake not found"; exit 1; }
@@ -74,7 +69,7 @@ if [ "$GGML_HIP" = "ON" ]; then
 fi
 
 # ------------------------------------------------------------------
-# 4. Warn about clone directory hygiene before touching anything
+# 3. Warn about clone directory hygiene before touching anything
 # ------------------------------------------------------------------
 # CLONE_DIR is a disposable, machine-managed source checkout — this
 # script runs `git pull` on it and may re-clone it from scratch.
@@ -104,7 +99,7 @@ if [ -d "${CLONE_DIR}/.git" ] && [ -n "$(git -C "$CLONE_DIR" status --porcelain 
 fi
 
 # ------------------------------------------------------------------
-# 5. Clone or update the repository (archiving the old build first)
+# 4. Clone or update the repository (archiving the old build first)
 # ------------------------------------------------------------------
 if [ -d "${CLONE_DIR}/.git" ]; then
     echo "--- Checking existing llama.cpp clone ---"
@@ -134,7 +129,7 @@ else
 fi
 
 # ------------------------------------------------------------------
-# 6. Configure with CMake
+# 5. Configure with CMake
 # ------------------------------------------------------------------
 echo "--- Configuring Build ---"
 
@@ -145,14 +140,16 @@ else
   HIP_FLAG="OFF"
 fi
 
-export ROCM_PATH=/opt/rocm
+# ROCm/HIP paths — overridable via .env or environment with sensible defaults
+export ROCM_PATH="${ROCM_PATH:-/opt/rocm}"
+export HIP_PATH="${HIP_PATH:-$(hipconfig -R 2>/dev/null || echo /opt/rocm)}"
 export HIPCXX="$(hipconfig -l)/clang"
-export HIP_PATH="$(hipconfig -R)"
 
-export CMAKE_PREFIX_PATH="/opt/rocm/lib/cmake:/opt/rocm:${CMAKE_PREFIX_PATH:-}"
+# Append ROCm paths to existing ones (respecting any .env/user overrides above)
+export CMAKE_PREFIX_PATH="/opt/rocm/lib/cmake:${ROCM_PATH}/lib/cmake:${ROCM_PATH}:${CMAKE_PREFIX_PATH:-}"
 export CMAKE_MODULE_PATH="/opt/rocm/lib/cmake:${CMAKE_MODULE_PATH:-}"
-export PATH="/opt/rocm/bin:$PATH"
-export LD_LIBRARY_PATH="/opt/rocm/lib:$LD_LIBRARY_PATH"
+export PATH="${ROCM_PATH}/bin:$PATH"
+export LD_LIBRARY_PATH="${ROCM_PATH}/lib:$LD_LIBRARY_PATH"
 
 # Source (-S) is the repo; build output (-B) lives outside it entirely.
 cmake -S "$CLONE_DIR" -B "$BUILD_DIR" -G Ninja \
@@ -183,7 +180,7 @@ if ! grep -q '^GGML_HIP:BOOL=ON$' <<< "$CACHE_LIST"; then
 fi
 
 # ------------------------------------------------------------------
-# 7. Build
+# 6. Build
 # ------------------------------------------------------------------
 echo "--- Starting Build ---"
 # We don't need --parallel here because we are using Ninja!
@@ -191,7 +188,7 @@ cmake --build "$BUILD_DIR"
 
 
 # ------------------------------------------------------------------
-# 8. Optional install step
+# 7. Optional install step
 # ------------------------------------------------------------------
 # Uncomment if you want to drop the binaries into /usr/local:
 # cmake --install "$BUILD_DIR" --prefix /usr/local

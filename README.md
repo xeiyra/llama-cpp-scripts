@@ -30,6 +30,11 @@ or execution. Variables set in the real shell environment always take
 precedence over values in `.env`, so a one-off override like
 `BIN_PATH=/tmp/test ./launch-llama-server.sh` still wins.
 
+The loader also supports:
+- `\n` in `.env` values → converted to real newlines (useful for `EXTRA_ARGS`)
+- `~` expansion in leading positions (`~/models` → `$HOME/models`)
+- `${VAR}` and `$VAR` expansion in values
+
 See `example.env` for a fully commented reference covering all variables
 for every script. Copy it to `.env` and uncomment / adjust the settings
 you want to change from their built-in defaults.
@@ -83,7 +88,20 @@ Each script is self-contained and configurable via environment variables
 | `BUILDS_ARCHIVE_DIR`  | `$ROOT_DIR/builds`                 | Versioned snapshots of previous builds, archived before each rebuild                                         |
 | `BUILD_TYPE`          | `Release`                          | CMake build type (`Release`, `Debug`, `RelWithDebInfo`, etc.)                                                |
 | `GGML_HIP`            | `ON`                               | Set to `OFF` to build CPU-only instead of ROCm/HIP                                                           |
+| `GGML_CCACHE`         | `OFF`                              | Whether to enable ccache for faster rebuilds                                                                 |
 | `ALLOW_DIRTY`         | `0`                                | Set to `1` to skip the confirmation prompt when `llama.cpp/` has local uncommitted changes (see note below) |
+
+#### ROCm/HIP paths
+
+These are set after `.env` loads, so they can be overridden in `.env` or
+via environment variables. Defaults to `/opt/rocm` unless your ROCm
+installation is elsewhere:
+
+| Variable        | Default              | Description                                                                  |
+| --------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `ROCM_PATH`     | `/opt/rocm`          | Root directory of the ROCm installation                                        |
+| `HIP_PATH`      | `${hipconfig -R}`    | HIP runtime path (auto-detected via `hipconfig`, falls back to `/opt/rocm`)  |
+| `HIPCXX`        | —                    | Full path to the HIP C++ compiler (`$(hipconfig -l)/clang`)                  |
 
 The `llama.cpp/` clone is treated as a **disposable, machine-managed
 checkout** — the script runs `git pull` on it and may re-clone it. Don't
@@ -119,7 +137,7 @@ omit it entirely. A few of the more relevant ones:
 
 | Variable                            | Default                              | Description                                                                                                                                                                       |
 | ----------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BIN_PATH`                          | `$HOME/ai-stack/engines/llama.cpp/build/bin` | Path to the built `llama-server` binary                                                                                                                                           |
+| `BIN_PATH`                          | `$HOME/ai-stack/engines/llama.cpp/build/bin/` | Path to the built `llama-server` binary (trailing slash is normalized automatically)                                                                                                                                           |
 | `HOST_VALUE`                        | `127.0.0.1`                          | `127.0.0.1` for localhost-only, `0.0.0.0` for LAN access                                                                                                                          |
 | `API_KEY_VALUE` / `API_KEY_ENABLED` | *(unset)* / `OFF`                    | Set both to require an API key. Pass the key in via env var at launch rather than editing the file, e.g. `API_KEY_VALUE="$(pass show llama-server-key)" ./launch-llama-server.sh` |
 | `ALLOW_UNAUTHENTICATED`             | `0`                                  | Set to `1` to bypass the safety check that refuses to bind a non-localhost host without an API key. Only on trusted LAN — see safety note below                                    |
