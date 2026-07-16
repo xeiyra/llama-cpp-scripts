@@ -14,17 +14,48 @@ export GGML_CCACHE=OFF
 # ------------------------------------------------------------------
 # 1. Variables (override on the command line if desired)
 # ------------------------------------------------------------------
-ROOT_DIR="$(pwd)"
-CLONE_DIR="${ROOT_DIR}/llama.cpp"        # source only — safe to delete/re-clone
+
+# .env loader (optional) — reads simple KEY=value pairs from a .env
+# file in the same directory as this script, without sourcing/
+# executing it. Only sets a variable if it isn't already set in the
+# real environment, so `ROOT_DIR=/foo ./install-llama_cpp.sh` still
+# overrides whatever is in .env.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+    while IFS='=' read -r key value; do
+        key="${key#"${key%%[![:space:]]*}"}"
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        value="${value%%[[:space:]]#*}"  # strip an inline trailing comment (space + # onward)
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%\"}"; value="${value#\"}"
+        value="${value%\'}"; value="${value#\'}"
+        value="${value/#\~/$HOME}"  # leading ~ -> $HOME
+        while [[ "$value" =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; do
+            var="${BASH_REMATCH[1]}"
+            value="${value//${BASH_REMATCH[0]}/${!var:-}}"
+        done
+        if [[ -z "${!key:-}" ]]; then
+            declare "$key=$value"
+        fi
+    done < "$ENV_FILE"
+fi
+
+ROOT_DIR="${ROOT_DIR:-$(pwd)}"    # defaults to cwd if not set via .env or environment
+CLONE_DIR="${CLONE_DIR:-${ROOT_DIR}/llama.cpp}"        # source only — safe to delete/re-clone
                                           # Treated as a disposable, machine-managed checkout.
                                           # Do not hand-edit files here — `git pull` runs on this
                                           # dir and may clobber or conflict with local changes,
                                           # and a re-clone would wipe them with no warning.
-BUILD_DIR="${ROOT_DIR}/build"            # current/live build — outside the repo
-BUILDS_ARCHIVE_DIR="${ROOT_DIR}/builds"  # versioned snapshots — outside the repo
+BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build}"            # current/live build — outside the repo
+BUILDS_ARCHIVE_DIR="${BUILDS_ARCHIVE_DIR:-${ROOT_DIR}/builds}"  # versioned snapshots — outside the repo
 
 # Hardware/Build Settings
-BUILD_TYPE="Release"                # Release/Debug etc.
+BUILD_TYPE="${BUILD_TYPE:-Release}"                # Release/Debug etc.
 GGML_HIP="${GGML_HIP:-ON}"          # Whether to use ROCm/HIP
 
 # Git
@@ -126,7 +157,7 @@ export LD_LIBRARY_PATH="/opt/rocm/lib:$LD_LIBRARY_PATH"
 # Source (-S) is the repo; build output (-B) lives outside it entirely.
 cmake -S "$CLONE_DIR" -B "$BUILD_DIR" -G Ninja \
   -DGGML_HIP=$HIP_FLAG \
-  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
   -DGGML_BLAS=ON \
   -DGGML_BLAS_VENDOR=OpenBLAS \
   -DGGML_LTO=ON \

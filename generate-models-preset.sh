@@ -48,8 +48,42 @@
 
 set -euo pipefail
 
-MODELS_DIR="${1:-}"
-OUT_FILE="${2:-models-preset.ini}"
+# ------------------------------------------------------------------
+# .env loader (optional) — reads simple KEY=value pairs from a .env
+# file in the same directory as this script, without sourcing/
+# executing it. Only sets a variable if it isn't already set in the
+# real environment. Lets you set MODELS_DIR / OUT_FILE in .env instead
+# of passing them as positional args every time.
+# ------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+    while IFS='=' read -r key value; do
+        key="${key#"${key%%[![:space:]]*}"}"
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        value="${value%%[[:space:]]#*}"  # strip an inline trailing comment (space + # onward)
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%\"}"; value="${value#\"}"
+        value="${value%\'}"; value="${value#\'}"
+        value="${value//\\n/$'\n'}"  # allow literal \n in .env to become real newlines (for multi-line values like EXTRA_ARGS)
+        value="${value/#\~/$HOME}"  # leading ~ -> $HOME
+        while [[ "$value" =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; do
+            var="${BASH_REMATCH[1]}"
+            value="${value//${BASH_REMATCH[0]}/${!var:-}}"
+        done
+        if [[ -z "${!key:-}" ]]; then
+            declare "$key=$value"
+        fi
+    done < "$ENV_FILE"
+fi
+
+# Positional args still take priority over .env / environment
+MODELS_DIR="${1:-${MODELS_DIR:-}}"
+OUT_FILE="${2:-${OUT_FILE:-models-preset.ini}}"
 PREFIX_QUANTIZER="${PREFIX_QUANTIZER:-1}"
 STRIP_SUFFIXES="${STRIP_SUFFIXES:-GGUF}"
 # Newline-separated "key = value" lines applied to every generated section.

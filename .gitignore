@@ -3,3 +3,4 @@ builds/
 llama.cpp/
 models-preset.ini
 *.gguf
+.env
