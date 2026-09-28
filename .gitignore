@@ -4,3 +4,14 @@ llama.cpp/
 models-preset.ini
 *.gguf
 .env
+*
+*/*
+
+!install-llama.cpp.sh
+!generalte-models-preset.sh
+!launch-llama-server.sh
+!LICENSE
+!README.md
+!example.env
+!examples/
+!examples/*
